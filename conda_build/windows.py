@@ -114,7 +114,7 @@ def msvc_env_cmd(bits, override=None):
     if float(version) >= 14.0:
         # For Python 3.5+, ensure that we link with the dynamic runtime.  See
         # http://stevedower.id.au/blog/building-for-python-3-5-part-two/ for more info
-        msvc_env_lines.append('set PY_VCRUNTIME_REDIST=%LIBRARY_BIN%\vcruntime{0}.dll'.format(
+        msvc_env_lines.append('set PY_VCRUNTIME_REDIST=%LIBRARY_BIN%\\vcruntime{0}.dll'.format(
             version.replace('.', '')))
 
     vcvarsall_vs_path = build_vcvarsall_vs_path(version)
@@ -174,8 +174,7 @@ def msvc_env_cmd(bits, override=None):
 
         error1 = 'if errorlevel 1 {}'
 
-        # Setuptools captures the logic of preferring the Microsoft Visual C++
-        # Compiler for Python 2.7 - falls back to VS2008 if necessary
+        # Prefer VS9 proper over Microsoft Visual C++ Compiler for Python 2.7
         msvc_env_lines.append(build_vcvarsall_cmd(vcvarsall_vs_path))
         # The Visual Studio 2008 Express edition does not properly contain
         # the amd64 build files, so we call the vcvars64.bat manually,
@@ -184,6 +183,10 @@ def msvc_env_cmd(bits, override=None):
         if arch_selector == 'amd64' and VCVARS64_VS9_BAT_PATH:
             msvc_env_lines.append(error1.format(
                 build_vcvarsall_cmd(VCVARS64_VS9_BAT_PATH)))
+        # Otherwise, fall back to icrosoft Visual C++ Compiler for Python 2.7+
+        # by using the logic provided by setuptools
+        msvc_env_lines.append(error1.format(
+            build_vcvarsall_cmd(distutils_find_vcvarsall(9))))
     else:
         # Visual Studio 14 or otherwise
         msvc_env_lines.append(build_vcvarsall_cmd(vcvarsall_vs_path))
@@ -208,11 +211,13 @@ def build(m, bld_bat, dirty=False, activate=True):
             fo.write('@echo on\n')
             for key, value in env.items():
                 fo.write('set "{key}={value}"\n'.format(key=key, value=value))
-            fo.write("set INCLUDE={};%INCLUDE%\n".format(env["LIBRARY_INC"]))
-            fo.write("set LIB={};%LIB%\n".format(env["LIBRARY_LIB"]))
             fo.write(msvc_env_cmd(bits=cc.bits, override=m.get_value('build/msvc_compiler', None)))
+            # Reset echo on, because MSVC scripts might have turned it off
+            fo.write('@echo on\n')
+            fo.write('set "INCLUDE={};%INCLUDE%"\n'.format(env["LIBRARY_INC"]))
+            fo.write('set "LIB={};%LIB%"\n'.format(env["LIBRARY_LIB"]))
             if activate:
-                fo.write("call activate.bat _build\n")
+                fo.write("call activate.bat {0}\n".format(config.build_prefix))
             fo.write("REM ===== end generated header =====\n")
             fo.write(data)
 

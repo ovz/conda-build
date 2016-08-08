@@ -9,6 +9,8 @@ from os.path import abspath, expanduser, join
 
 import conda.config as cc
 
+on_win = (sys.platform == 'win32')
+
 # Don't "save" an attribute of this module for later, like build_prefix =
 # conda_build.config.config.build_prefix, as that won't reflect any mutated
 # changes.
@@ -57,8 +59,10 @@ class Config(object):
     else:
         croot = abspath(expanduser('~/conda-bld'))
 
+    prefix_length = 255
+
     short_build_prefix = join(cc.envs_dirs[0], '_build')
-    long_build_prefix = max(short_build_prefix, (short_build_prefix + 25 * '_placehold')[:255])
+
     # XXX: Make this None to be more rigorous about requiring the build_prefix
     # to be known before it is used.
     use_long_build_prefix = False
@@ -93,12 +97,16 @@ class Config(object):
         return res
 
     @property
+    def long_build_prefix(self):
+        return max(self.short_build_prefix,
+                            (self.short_build_prefix +
+                             int(self.prefix_length / 10) * '_placehold')[:self.prefix_length])
+
+    @property
     def build_prefix(self):
-        if self.use_long_build_prefix is None:
-            raise Exception("I don't know which build prefix to use yet")
-        if self.use_long_build_prefix:
-            return self.long_build_prefix
-        return self.short_build_prefix
+        if on_win:
+            return self.short_build_prefix
+        return self.long_build_prefix
 
     @property
     def build_python(self):
